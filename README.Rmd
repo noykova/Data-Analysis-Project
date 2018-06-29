@@ -3,8 +3,8 @@ title: "README"
 author: "Neli Noykova"
 date: "June 29, 2018"
 output:
-  html_document: default
   pdf_document: default
+  html_document: default
 ---
 
 
@@ -35,6 +35,6 @@ This is R Markdown document, created in R Studio (package Rmarkdown should be in
 
 Here is the link to my course report:
 
-https://noykova.github.io/Data-Analysis-Project/
+https://noykova.github.io/Data-Analysis-Project/INDEX.html 
 
 
