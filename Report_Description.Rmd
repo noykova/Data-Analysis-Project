@@ -1,0 +1,845 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+<style type="text/css">
+
+body{ /* Normal  */
+      font-size: 18px;
+  }
+td {  /* Table  */
+  font-size: 16px;
+}
+h1.title {
+  font-size: 38px;
+  color: DarkRed;
+}
+h1 { /* Header 1 */
+  font-size: 28px;
+  color: DarkBlue;
+}
+h2 { /* Header 2 */
+    font-size: 22px;
+  color: DarkBlue;
+}
+h3 { /* Header 3 */
+  font-size: 18px;
+  font-family: "Times New Roman", Times, serif;
+  color: DarkBlue;
+}
+code.r{ /* Code block */
+    font-size: 16px;
+}
+pre { /* Code block - determines code spacing between lines */
+    font-size: 16px;
+}
+</style>
+
+# Report on Data Anaylisis Project   
+##June 2018, Helsinki University.   
+
+conducted by *Neli Noykova* 
+
+# The data 
+The data for this project are taken from [**Statistics Finland**] (https://tilastokeskus.fi/tup/mikroaineistot/aineistot_en.html). These are individual level combined employer-employee data, or so-called FLEED (Finnish Longitudinal Employer-Employee Data). The original data contain information on population of working age, which can be combined with enterprise and establishment level data. 
+Here we use two adapted for studying purposes data sets in Excel format (files [**fleed_tyo.csv**](https://github.com/noykova/Data-Analysis-Project) and [**fleed_yritys.csv**](https://github.com/noykova/Data-Analysis-Project)).
+
+## Employees
+The file **fleed_tyo.csv** consists of data about 15-70 years old employees in Finland for the period 1990-2010. Because of data protection reasons only 15 years period is taken into account, and the years are numbered from 1 to 15. The file is fully described (in Finnish) [here](https://www.stat.fi/static/media/uploads/tup/mikroaineistot/minifleed_tyossakaynti.pdf). 
+The sample data involve information about 89312 persons and 18 variables, describing person's basic characteristics, family, living, employment relationships, periods of unemployment, income and education. 
+The variables, listed in this file, are:  
+
+**vuosi** - Year, given in integer values.    
+**shtun** - Encrypted personal identity code, given in integer values.   
+**syrtun** - Encrypted enterprise code, related to the employment relationship during the last week of the year), integer values, with missing values.   
+**sukup** - Gender, 2 different integer values.    
+**syntyv** - Year of Birth, integer values.  
+**kieli** - Native language, defined as factor variable with 3 levels.   
+**peas** - Family status, 7 different integer values: 1 -head, 2 - spouse, 3 - child, 4 - head of cohabiting family, 5 - spouse of cohabiting family, 9 - unknown, 0 - not belonging to a family.   
+**a7lkm** - Number of children aged under 7 in family, integer values.   
+**a18lkm** - Number of children aged under 18 in family, integer values.   
+**ktutk** - Education, integer values.  
+**sose** -  Socio-economic group, 9 different integer values.   
+**ptoim1** - Main activity (TVM=employment relationship during the last week of the year), 7 different integer values.   
+**tyokk** - Months in employment, 13 different integer values.   
+**tyke** - Number of unemployment months, 13 different integer values.   
+**toimiala** - Industry (TVM=employment relationship during the last week of the year). It is defined as factor variable with 23 levels.   
+**svatva** - Earned income total in state taxation, integer values.   
+**tyotu** - Earned income, integer values.   
+**suuralue12** - Major region based on the 2012 regional division, 5 different integer values.   
+```{r}
+data_workers <- read.csv(file="fleed_tyo.csv", header=TRUE, sep=",")
+str(data_workers)
+```
+
+
+##Employers
+The other file, **fleed_yritys.csv**, involves data about the corresponding employers during the same period. It is described in Finnish [here](https://tilastokeskus.fi/static/media/uploads/tup/mikroaineistot/minifleed_yritystiedot.pdf).   
+The sample data involve information about 66878 companies and 6 variables, describing the different companies where employees have been working during the observed period. 
+The variables, listed in this file, are:   
+
+**vuosi** - Year, given in integer values.    
+**syrtun** - Encrypted enterprise code, related to the employment relationship during the last week of the year), integer values, with missing values.   
+**oty** - Type of owner, integer values.   
+**toimiala** - Industry (TVM=employment relationship during the last week of the year). It is defined as factor variable with 22 levels.   
+**SLHKY** - Group of the company according the number of employees working there, 9 different integer values corresponding to 9 different groups - 1 with the smallest number of employees (< 4,5), and 9 with the biggest number of employees (>=9 999,5).    
+**sllvy** - Group of the company according its turnover, 9 different integer values, corresponding to 9 different groups - 1 with the smallest turnover (< 1000), and 9 with the biggest turnover (>=9 200 000 000).   
+
+```{r}
+data_firms <- read.csv(file="fleed_yritys.csv", header=TRUE, sep=",")
+str(data_firms)
+```
+
+
+##How the data about employees and employers are connected?
+Both tables are connected via the variable **syrtun**, which is an encrypted enterprise code describing the employment relationship during the last week of the year. 
+
+
+# The goal 
+The goal of this project is to find out how the employee's family status and the size of the employing company (measured by its turnover) are related to the size of the earned income.
+
+## Simplifying assumptions
+
+1. The data should be restricted to the year **vuosi**=2 (the last number of my student number).
+
+2. We assume that the whole earned income of each employee has come from a linked company during the investigated year.
+
+3. We assume that the different employees are "independent of each other". 
+
+4. The missing values can be omited. 
+ 
+
+## Data wrangling 
+
+1. Take a subset for year **vuosi** = 2 from both original tables. 
+
+```{r}
+data_workers2 <- subset(data_workers, vuosi==2)
+dim(data_workers2)
+data_firms2 <- subset(data_firms, vuosi== 2)
+dim(data_firms2)
+
+```
+
+
+2. Merge both data frames by their intersection via the column **syrtun**.
+
+```{r}
+data1<-merge(data_workers2, data_firms2, by="syrtun")
+dim(data1)
+```
+
+3. We have to convert the integer values of some variables to factors. Since these variables are categorized to several groups, I think it is logical to investigate them as categorical ones. For example the groups in **sllvy** are divided according the companies turnovers in increasing order, but even in this case we are not allowed to compare directly for example the values 1 and 9 (for first and ninth group) since we are not guaranteed that there is such a numerical proportion between both groups. The numbers from 1 to 9 are just labels of different categories. 
+```{r}
+data1[,'peas']<-factor(data1[,'peas'])
+levels(data1$peas)
+
+data1[,'a7lkm']<-factor(data1[,'a7lkm'])
+levels(data1$a7lkm)
+
+data1[,'a18lkm']<-factor(data1[,'a18lkm'])
+levels(data1$a18lkm)
+
+data1[,'SLHKY']<-factor(data1[,'SLHKY'])
+levels(data1$SLHKY)
+
+data1[,'sllvy']<-factor(data1[,'sllvy'])
+levels(data1$sllvy)
+
+```
+
+
+4. Remove the missing values. 
+```{r}
+data2<-na.omit(data1)
+dim(data2)
+```
+We see that since there are some missing data for all employees corresponding to year 2, if we remove all missing values, we end up with empty subset. 
+
+Therefore at this stage I remove only the missing values, involved directly in task description. 
+```{r}
+data<-data1[!is.na(data1$svatva),]
+dim(data)
+```
+#First look at the within correlation using ggpairs
+To get a glimpse of the three targeted data variables we plot all investigated variables against each other.
+
+```{r}
+library(ggplot2)
+library(GGally)
+var<-data[,c("svatva", "peas", "sllvy")]
+assignInNamespace("ggally_cor", ggally_cor, "GGally")
+ggpairs(var, upper = list(continuous = wrap("cor", size = 10)), lower = list(continuous = "smooth"))
+
+```
+We observe that the total earned income in almost all groups in both categoracal variables - family status and company turnover - deviates from normal distribution. 
+
+#Univariate analyses
+
+##Univariate exploratory data analysis of total earned income **svatva**
+The aim at this first analysis step is to achieve some preliminary assessments about the population distribution of the variables **svatva**, **SLLVY** and **peas** using the data of the observed sample for year=2.
+The variable **svatva** is numerical, while **svatva** and **SLLVY** are categorical. 
+
+First we analyse **svatva**. 
+```{r warning=FALSE}
+attach(data)
+summary(svatva)
+```
+
+We see that the mean and median are quite near, which suggests normal distribution. 
+
+The distribution of **svatva** can be visualized using so called **steam-and-leaf plot**. This plot is a special textual graph (table) where each data value is split into a "stem" (the first digit or digits) and a "leaf" (usually the last digit). 
+
+```{r}
+stem(svatva)
+```
+
+The stem-and-leaf plot suggests that comparing to normal distribution this one is skewed towards positive values. 
+Next the distribution is shown in more details using a **histogram plot**. 
+```{r}
+h<-hist(svatva, breaks=seq(0, 101000, by=2500), plot=F)
+#str(h)
+
+plot(h, col = heat.colors(length(h$mids))[length(h$count)-rank(h$count)+1],
+     ylim = c(0, max(h$count)+5),
+     main="Earned income total in state taxation, weight %",
+     sub="Counts shown above bar, actual values shown with rug plot")
+rug(svatva)
+#cex - size of the text on the figure
+text(h$mids, h$count, h$count, cex=0.7, cex.main =0.7, cex.sub=0.7, pos=3)
+rm(h)
+```
+
+We see that there are some unusually high values on the right tail of the histogram. 
+Next we investigate this part of the histogram, the employees who have earned total income  **svatva**> 48500. 
+```{r}
+data[svatva>48500,]
+```
+
+We observe that these are 45 observations, which are consistent with the total earned income of other employees. There is no evidence for a data entry error. 
+The interesting observation is that 34 of these employees work in private domestic companies, and 42 are native Finnish speakers (other 3 are Swedish speaking). Only 7 of them are women. 
+
+We continue to investigate this distribution using **other exploratory graphics**.  
+```{r}
+boxplot(svatva, notch=T, horizontal=T,main="Boxplot of total earned income")
+```
+This **boxplot** does not show clear evidence that the distribution is right skewed. The employees with total earned income higher than 10 000 are shown as outliers (more than the estimated maximum of the distribution (1.5 times IQR larger than third quartile)). Also there is one outlier from the left (less than estimated minimum of the distribution (1.5 times IQR smaller than first quartile)). This does not means that these aoutliers are not part from the investigated population. 
+
+In order to be able to compare the histograms with other histograms, using different number of observations, we use **probability density** instead frequencies when plot the histogram. These densities are computed using 3 different kernel density estimators, which are smoothed continuous approximation to the histogram. 
+```{r}
+hist(svatva, freq=F, breaks=seq(0, 101000, by=2500), cex.main =0.9, main="Probability density for total earned income")
+#density - computes kernel density estimates. 
+#These are smoothed continuous approximation to the histogram. 
+lines(density(svatva),lwd=2)
+lines(density(svatva, adj=.5),lwd=1)
+lines(density(svatva, adj=2),lwd=1.5)
+```
+
+We again see that this distribution has quite long right tail. 
+
+Next we compare the actual distribution to the theoretical one using **quantile-quantile plot**.
+```{r}
+qqnorm(svatva, main="QQ plot for total earned income vs Normal distribution",ylab="Total earned income")
+qqline(svatva, col=4)
+```
+This plot shows clearly that the distribution is not normal, especially at the right tail where the values are too high. 
+
+
+**Point estimation. Inference of the mean.** We have used *summary()* function to compute the descriptive statistics, including also the median and mean of this sample. Here we can try to make some inferences about the population mean (point estimate). For such small sample we assume t-distribution. For the null hyphotesis H0 here we assume the mean mu= 18000. We set confidence interval 99%. 
+
+```{r}
+t.test(svatva, mu=18000, conf.level = 0.99)
+```
+The best estimate of the mean is 19433.72 for total earned income of the company. With only 1% to be wrong we state that the true mean is between 18823.60 and 20043.84 total earned income. Since the p-value is very small (almost 0), we cannot reject H0.  
+
+*Conclusion: We observe clear deviation from normal distribution of total earned income. Therefore we expect problems in the further multivariate analysis.* 
+
+##Univariate exploratory data analysis of the group of the company according its turnover **sllvy** and family status **peas**.
+
+We are interested to find the relative frequencies of different categories in both variables. 
+For this purpose we first count the number of occurrences of each type using the *table* function, and next compute the proportions of the different classes.
+
+###Analysis of **sllvy** - company groups according their turnover. 
+```{r}
+counts_sllvy <- table(sllvy)
+proportions_sllvy<-counts_sllvy / sum(counts_sllvy)
+proportions_sllvy
+```
+The most common category corresponds to the sample mode, which in this case is the category 9, companies with turnover >= 200 000 000. Since the values are nominal, is is not very correct to compute the median directly from them. 
+Next we display the counts on bar plot: 
+```{r}
+library(ggplot2)
+library(GGally)
+bar_sllvy <- ggplot(data, aes(x = sllvy)) 
+bar_sllvy <- bar_sllvy + geom_bar()
+#summary(bar_sllvy)
+ggplot(data, aes(x = sllvy)) + 
+  geom_bar(fill = "orange", width = 0.7) + 
+  xlab("Company group according its turnover") + ylab("Number of Observations")
+
+```
+###Analysis of family status **peas**. 
+```{r}
+counts_peas <- table(peas)
+proportions_peas<-counts_peas / sum(counts_peas)
+proportions_peas
+```
+We see that the most common category (and also a sample mode) is group 1, which codes the man in the family who is also a had of the family. 
+
+The bar plot is visualized as:
+```{r}
+bar_peas <- ggplot(data, aes(x = peas)) 
+bar_peas <- bar_peas + geom_bar()
+#summary(bar_peas)
+ggplot(data, aes(x = peas)) + 
+  geom_bar(fill = "orange", width = 0.7) + 
+  xlab("Family group") + ylab("Number of Observations")
+
+```
+
+#Bivariate data analysis: Total earned income vs. company turnover. 
+
+##Exploratory data analysis.  
+Before to summarize and graph these data we first look them carefully and try to clarify which total earned incomes are associated with different groups of company turnover. For this purpose we first *sort* the observations and use *order* function to keep the indexes of sorted vector. 
+
+```{r}
+svatva[order(svatva)][1:100]
+```
+```{r}
+sllvy[order(svatva)] [1:100]
+```
+
+It is difficult to make some conclusions only by looking these values. 
+Next we use *by* method to compute some statistics for every level of the categorical variable. We compute also length of the range of income in every company turnover group. 
+```{r}
+by(svatva,sllvy,range)
+
+```
+```{r}
+by(svatva,sllvy,function(x) max(x)-min(x))
+
+```
+The number of observations in every group also can be obtained using *by* method: 
+```{r}
+by(svatva,sllvy,length)
+```
+This corresponds to the bar graph visualization during univariate analysis of **sllvy**.
+
+Next we use boxplot visualization, where the incomes are divided by the different factors of companies turnover. The attribute *notch=T* on this plot shows if the class medians are significantly different. 
+```{r}
+boxplot(svatva~sllvy, notch=T, horizontal=T, xlab="Total earned income", ylab="turnover group")
+
+```
+
+The results shown on this box plot are somehow surprising. It seems that there is not too big differences in the total earned income of different employees and the size of turnover of the company where they work. There are also not too large differences in the average income of employees in different groups. The strange thing is that in the lowest turnover group 1 the mean income is higher comparing to groups 2, 3 and 4. The mean income increases in groups 5, 6, 7, 8 and 9. When increase the group number (especially in group 5), the differences reflect in more outliers from right. When we compare this plot with the number of observations in every group shown above, we see that groups 1, 3 and 8 are significantly under-represented (about twice less then group 5). 
+The groups 3, 6 and 9 have the widest ranges, while the groups 1 and 2 have the lowest ranges. In all groups the distributions are somehow skewed, negatively or positively. Only in group 3 the distribution seems to be symmetric. 
+
+A numerical conformation of the results shown on box plots could be obtained using summaries about different groups in *by* method: 
+```{r}
+by(svatva,sllvy,summary)
+```
+
+##One-way analysis of variance (ANOVA)
+The simplest ANOVA is one-way, where the total variance of the data is compared to the residual variance after each observation's value is adjusted for the mean for the one factor. 
+Here the question is how big proportion of employees with their corresponding total income varies among the 9 companies group (divided by their turnover).
+In R the method, use for ANOVA, is *lm*. It is used also for linear regression. ANOVA is just another form of the same linear modeling, as it is shown in [4]. 
+```{r}
+lm_an<-lm(svatva~sllvy)
+summary(lm_an)
+```
+The *Intersept* corresponds to the mean for Group 1 in **sllvy**. The mean estimates for other groups are shown in corresponding coefficients in column Estimate as difference the corresponding group and intercept (mean for group 1). This summary shows only first two groups as important, and group 9 as quite significant.
+The value of Adjusted R-squared is 0.043, which means that only 4.3% of total variation is explained by **sllvy**. Since p-value< 2.2e-16 this means that the probability this amount of variability to be explained by chance is practically 0. 
+ 
+###Conclusion: There is no strong direct relationship between total earned income of employees and company turnover groups. 
+
+#Bivariate data analysis: Total earned income vs. family status. 
+We repeat the same pipeline to investigate bivariate relationship between total earned income **svatva** and family status **peas**.
+
+##Exploratory data analysis.  
+```{r}
+svatva[order(svatva)][1:100]
+```
+```{r}
+peas[order(svatva)] [1:100]
+```
+
+As before, here is also difficult to make some conclusions only by looking these values. 
+Next apply *by* method.
+```{r}
+by(svatva,peas,range)
+
+```
+```{r}
+by(svatva,peas,function(x) max(x)-min(x))
+
+```
+Find out the number of observations, which fall in different family groups: 
+```{r}
+by(svatva,peas,length)
+```
+This corresponds to the bar graph visualization during univariate analysis of **peas**.
+Different groups are not equally represented. The biggest part fall in Group 1, 753 observations, followed by Group 2 (427 observations) and Group 0 (307 observations). The groups 3, 4 and 5 have comparable number of observations (155, 145 and 122), while the group 9 with unknown family status is presented only by 7 observations. 
+
+The box plot is shown below. 
+Since some notches went outside hinges, the attribute *notch=T* is now set as *notch=F*. 
+```{r}
+boxplot(svatva~peas, notch=F, horizontal=T, xlab="Total earned income", ylab="Family group")
+
+```
+
+As it was expected, the highest average income in Group 1, for the heads of the families. It has the highest range, and the biggest number of outliers from right. The smallest range shows group 9. The range of group 5 is also small. All distributions are not symmetric.  
+
+Numerically the same box plot results are shown below: 
+```{r}
+by(svatva,peas,summary)
+```
+It seems that the family status has some influence on earned income. This statement is further examined using ANOVA. 
+
+##One-way analysis of variance (ANOVA)
+```{r}
+lm_an_2<-lm(svatva~peas)
+summary(lm_an_2)
+```
+In this case the first 5 family groups (from 0 to 4) are shown to be significant, and also the family group 5 could be included in the model. 
+The value of Adjusted R-squared now is 0.1327, which means that 13.27% of total variation is explained by **peas**. Since p-value< 2.2e-16 this means that the probability this amount of variability to be explained by chance is practically 0. 
+ 
+###Conclusion: There is some relationship between total earned income of employees and family status. This relationship is not too strong since the proportion of explained variance is only 13.27%.  
+
+#Bivariate analysis: visualization of the two categorical variables company turnover and family status     
+The *ggplot2* package in R allows visualization of two categorical variables using bar plots. We use this capability to visualize the company turnover and family status. 
+```{r}
+g0<-ggplot(data, aes(x = sllvy, fill = peas)) + geom_bar(position = "dodge")
+g0 + xlab("Company turnover")
+```
+We see that except the company turnover group 1, in all other groups the biggest part of employees is form of family heads (family status 1). Next biggest proportion in most of the groups is the spouse (status 2). For the lowest turnover group 1 the proportion of spouses is highest. This most important family group is 3 = child. 
+
+#Multivariate analysis.
+##Multivariate visualization
+###Box plot with multiple groups
+The *ggplot2* package in R offers also visualization of the numerical predctor and two categorical variables on one plot. The total income (on y axes) for every company turnover group (on x axes) is shown as side-by-side box plots using different colors for different family statuses.  
+First generate frequency tables: 
+```{r}
+table(sllvy, peas)
+```
+Since the number of observations in every group is not equal, this is not balanced design. 
+
+At this stage, before to start actual ANOVA modeling, we compute some descriptive statiustics. Means of all groups: 
+```{r}
+tapply(svatva,list(sllvy,peas),mean)
+```
+Standard deviations: 
+```{r}
+tapply(svatva,list(sllvy,peas),sd)
+```
+
+
+```{r}
+g1 <- ggplot(data, aes(x = sllvy, y = svatva, col=peas))
+g1 + geom_boxplot() + xlab("Company turnover group")+ ylab("Earned total income")
+```
+
+We see that in the lowest turnover group 1 the highest mean income have employees with family status 4, heads of cohabiting family. It is interesting to observe that this is the hihgest mean income among all other turnover groups with different family statuses. 
+###Line plots with multiple groups
+```{r warning=FALSE}
+library(dplyr)
+library(ggpubr)
+ggline(data, x = "sllvy", y = "svatva", 
+       xlab = "Company turnover group", ylab="Earned total income",  
+       color = "peas",
+       add = "mean_se", palette = 1:7)
+```
+Here we see how the mean total income values are connected in different company turnover groups for different family statuses. 
+
+##Two way ANOVA test to evaluate the effect of the two categorical variables **sllvy** and **peas** on a response variable **svatva**. 
+Since for these data we have the case of unbalanced design, there are 3 methods to apply two way ANOVA test in these data, namely Type I, Type II and Type III sum of squares [7]. 
+
+We first examine the case without interactions, so called additive model. Here we also have to assume that the two categorical variables **sllvy** and **peas** are independent. For such additive models the Type II two-sided ANOVA method is recommended [7]. 
+
+```{r warning=FALSE}
+library(car)
+anova_ind <- aov(svatva ~ sllvy + peas, data = data)
+Anova(anova_ind, type = "II")
+
+```
+
+From these results we can conclude that both company turnover group **sllvy** and family status **peas** are statistically significant with very small p-value (less than 2.2e-16). We expect that if there is no interaction between these variables, changing one of them will impact significantly the mean total income of employee. 
+
+Next we assume that there is a simultaneous effect of company turnover groups and family statuses and involve the interaction term in the model: 
+
+```{r}
+#anova_inter <- aov(svatva ~ sllvy + peas + sllvy:peas, data = data)
+#Anova(anova_inter, type = "III")
+```
+
+This code chunk produces the following error message: 
+
+"Error in Anova.III.lm(mod, error, singular.ok = singular.ok, ...) : 
+  there are aliased coefficients in the model"
+  
+This seems to be a warning about multicollinearity. Therefore we continue to analyze only the first model and compute some summary statistics.
+
+##Summary statistics
+We compute the grand mean and the mean by groups: 
+```{r}
+model.tables(anova_ind, type="means")
+```
+
+These numbers are not much different from analogous ones during uni- ja bivariate analyses. 
+
+##Multiple pairwise comparison between the means of the groups: Tukey Honest Significant Differences (THS)
+A significant p-value in ANOVA two side tests means that some of the group means are different. Since we do not know which pairs of groups are different, we can clarify it by performing multiple pairwise comparison. In R this can be provided using the method TukeyHSD(). 
+
+```{r}
+TukeyHSD(anova_ind)
+```
+
+These results show that the biggest part of pairs in company turnover groups show high p-values (3-1, 4-1, 5-1, 6-1, 7-1, 8-1, 4-3, 5-3, 6-3, 7-3, 8-3, 6-5, 7-5, 8-5, 9-5, 7-6, 8-6, 9-6, 8-7, 9-7, 9-8). Also quite many pairs in **peas** express higher p-values (4-0, 9-0, 9-1, 5-2, 9-2, 9-3, 9-4, 9-5). 
+
+##Residual analysis: diagnostic plots to check the assumptions about normally distributed data and variance.
+
+```{r}
+op <- par(mfrow = c(2, 2))
+plot(anova_ind)
+par(op)
+```
+
+On the first plot the points 1822, 1443 and 79 are detected as outliers, which can affect normality and homogeneity of variance. It can be useful to remove them in order to match the test assumptions.
+
+The second plot shows that the normality assumption is violated on the right upper part of the plot. As we have seen in the previous univariate analyses and plots, the total income data have long tail from right. 
+
+Because of the unbalanced design the leverages are not constant.  On the fourth plot they are drawn in x-axis.
+
+###**Conclusion:** The provided analyses using two-side ANOVA with unbalanced design show that the dependences between categorical variables company turnover group **sllvy** and employees family status **peas**, and earned total employees income **svatva** as predictor are probably more complicated. For the investigated subset for year=2 even when quite small part of missing values are removed, the assumptions for normally distributed data and variance are not matched. The unbalanced design increases the complexity of this investigation.  
+
+# Bivariate and multivariate analysis in the case of grouped levels of the categorical variables.
+Next we observe that some of the levels of the categorical variables could be combined since they do not differ too much. For example the family status of people, who are officially married (family statuses 1 and 2) and others, who live together and probably have children, but are not officially married (family statuses 4 and 5), should not differ too much in the sense of their expenses and way of living. Since the children, who work, should not be too small, for me they look somehow similar (in the sense that financially they do not take care for the other members of family) to the singles. Also the group of unknowns is quite small and could be joined to the group of singles. Thus the new larger groups are: 0 - single/child/unknown; 1 - head, 2 - spouse. 
+I also decided to group every 3 consequent (by their turnover) company groups in one bigger, so company group 1 has turnover LV <100 000, for group 2 the turnover LV is 100 000 <= LV < 10 000 000 , for group 3 the turnover 10 000 000 <= LV. 
+
+```{r}
+#5.1. Group the levels of peas and sllvy
+#Group the levels in family status)
+#0 - single/child/unknown
+data$peas[data$peas=='3']<-'0'
+data$peas[data$peas=='9']<-'0'
+#1 - head
+data$peas[data$peas=='4']<-'1'
+#2 - spouse
+data$peas[data$peas=='5']<-'2'
+#drop levels
+data$peas<-droplevels(data$peas)
+#Group the levels in company turnover
+#1 - new group formed from 1,2,3.
+data$sllvy[data$sllvy=='2']<-'1'
+data$sllvy[data$sllvy=='3']<-'1'
+#4 - new group formed from 4,5,6.
+data$sllvy[data$sllvy=='5']<-'4'
+data$sllvy[data$sllvy=='6']<-'4'
+#7 - new group formed from 7,8,9.
+data$sllvy[data$sllvy=='8']<-'7'
+data$sllvy[data$sllvy=='9']<-'7'
+data$sllvy<-droplevels(data$sllvy)
+levels(data$sllvy)<-c("1", "2", "3")
+```
+##First look at the within correlation using ggpairs
+To get a glimpse of these combined data we plot all investigated variables against each other.
+```{r warning=FALSE}
+var<-data[,c("svatva", "peas", "sllvy")]
+assignInNamespace("ggally_cor", ggally_cor, "GGally")
+ggpairs(var, upper = list(continuous = wrap("cor", size = 10)), lower = list(continuous = "smooth"))
+```
+
+We see that the distribution of total earned income for the highest group of heads of families deviates from normal distribution in similar way as the wholedistribution of the earned income. The distributions of earned income for highest two turnover company groups also have long right tails. 
+
+Next we repeat the bivariate and multivariate analyses following the same pipeline as before. 
+##Bivariate plots
+The corresponding bivariate box plots in this case are: 
+```{r}
+boxplot(data$svatva~data$peas, notch=F, horizontal=T, xlab="Total earned income", ylab="Family status")
+
+```
+
+We observe that the mean values f both groups of singles and spouses are very similar, while heads of family have higher mean value of their total income in wider range. 
+
+```{r}
+boxplot(data$svatva~data$sllvy, notch=F, horizontal=T, xlab="Total earned income", ylab="Company turnover")
+
+```
+Here we see clear tendency for increasing the mean total income in different company turnover groups. In this case there is clear difference between 3 different groups. 
+
+```{r}
+g0<-ggplot(data, aes(x = data$sllvy, fill = data$peas)) + geom_bar(position = "dodge")
+g0 + xlab("Company turnover")
+```
+The observed dependences on the box plots are even better visualized on this bar plot. Only the family group 0 of singles/children/unknown does not show clear increasing tendency with increasing the company turnover. 
+
+##Multivariate analysis
+We follow the same steps as before. First generate frequency tables and make the same observation as before - the number of observations, which fall in different groups, is different, so again we observe that the design is not balanced.  
+```{r include=FALSE}
+table(data$sllvy, data$peas)
+summary(data$svatva) 
+summary(data$sllvy)
+summary(data$peas)
+```
+
+We show some descriptive statistics anout the means
+```{r}
+tapply(data$svatva,list(data$sllvy,data$peas),mean)
+```
+and standard deviations: 
+```{r}
+tapply(data$svatva,list(data$sllvy,data$peas),sd)
+```
+###Visualization of the total earned income and the two categorical variables company turnover and family status.
+Box plot with multiple groups.
+```{r}
+g1 <- ggplot(data, aes(x = data$sllvy, y = data$svatva, col=data$peas))
+g1 + geom_boxplot() + xlab("Company turnover group")+ ylab("Earned total income")
+```
+Line plots with multiple groups
+```{r}
+library(dplyr)
+library(ggpubr)
+
+ggline(data, x = "sllvy", y = "svatva", 
+       xlab = "Company turnover group", ylab="Earned total income",  
+       color = "peas",
+       add = "mean_se", palette = 1:7)
+
+```
+Both graphs suggest that there is clear dependency between the earned total income and both categorical variables - company turnover and family status. 
+###Two way ANOVA test
+As before for the case of unbalanced design we apply type II sum of squares method to run ANOVA.  
+First we assume that both categorical variables are **independent**.  
+```{r}
+anova_ind <- aov(data$svatva ~ data$sllvy + data$peas, data = data)
+Anova(anova_ind, type = "II")
+```
+Again both independent variables appear to be very significant because the very low p-values. 
+We also check the model which involves the **simultaneous effect** of both predicates. Here we apply type III sum of squares method. 
+```{r}
+anova_inter <- aov(data$svatva ~ data$sllvy + data$peas + data$sllvy:data$peas, data = data)
+Anova(anova_inter, type = "III")
+```
+Now we observe that all predicates are significant. 
+The intercept is the estimate of the predicate when all the independent variables are 0. By a rule the significance of the intercept is not of interest because its value can be changed by recoding the predictor, and this will not affect the meaning of the model. 
+Since this model shows significant simultaneous effect of both predicates, we cannot assume that these are independent and continue its investigation. 
+
+We compute some **summary statistics**:
+```{r}
+model.tables(anova_inter, type="means")
+```
+Next we obtain the **multiple pairwise-comparison** between the means of the groups by computing Tukey Honest Significant Differences (THS). 
+```{r}
+TukeyHSD(anova_inter)
+```
+Again we observe some high p-values, indicating that there is not significant efect between corresponding pairs of variables. I am not very sure how strong the conclusions from this test for the case of unbalanced design are. 
+**Residual analysis**: diagnostic plots to check the assumptions about normally distributed data and variance.
+```{r}
+op1 <- par(mfrow = c(2, 2))
+plot(anova_inter)
+par(op1)
+
+```
+On the first plot we observe that the assumption about homogeneity of variances is probably valid. Again the points 1822, 1443 and 79 are detected as outliers and can affect the assumptions about normality and homogeneity of variance. In this model we are able to compute Levene's test to check the homogeneity of variances (leveneTest() in car package), but as it is stated in [10], it is not recommended for the case of unbalanced design because the significance level could be under- or overestimated. 
+On the second plot we again observe that the normality assumption is violated on the right upper part of the plot. 
+On the fourth plot the leverages are drawn in x-axis.
+
+###**Conclusion:** Grouping several similar levels in both categorical variables concerning family status and company turnover into bigger homogenous groups significantly improves the results in this particular task and data subset. Bivariate visualization revealed some clear tendencies like for example the increasing frequencies in almost all family groups with increasing turnover. Now we are able to observe the clear tendency for increasing the mean earned income in almost all family statuses when company turnover increases. The two way ANOVA analysis revealed the important fact of simultaneous effect of family status and company turnover together. 
+
+#Some interesting relations.Possible future work.
+After wrangling around all columns, I choose some of them which look interesting and plot them against each other. I added to the three already investigated variables the other numerical variable **tyotu** (income from salary), and **syntyv** (year of birth), and also one more categorical variable - **SLHKY** about the size of the company measured by number of employees. Since we have already observed that it is difficult to make some inference when the number of categories is too big, I have applied similar grouping of all 3 consequent categories to 1 bigger in **SLHKY** as well. There are two different colors on the plot, separating males (pink) and females (blue). 
+
+```{r warning=FALSE, include=FALSE}
+#6.1. Some data transformations
+##change sukup and suuralue12 to factor
+data1[,'sukup']<-factor(data1[,'sukup'])
+levels(data1$sukup)
+data1[,'SLHKY']<-factor(data1[,'SLHKY'])
+levels(data1$SLHKY)
+#remove na's in svatva and tyotu
+data1<-data1[!is.na(data1$svatva),]
+data_p<-data1[!is.na(data1$tyotu),]
+#combine group levels in peas, sllvy and SLHKY #
+#0 - single/child/unknown
+data_p$peas[data_p$peas=='3']<-'0'
+data_p$peas[data_p$peas=='9']<-'0'
+#1 - head
+data_p$peas[data_p$peas=='4']<-'1'
+#2 - spouse
+data_p$peas[data_p$peas=='5']<-'2'
+#drop levels
+data_p$peas<-droplevels(data_p$peas)
+summary(data_p$peas)
+#Group the levels in company turnover
+levels(data_p$sllvy)
+#1 - new group formed from 1,2,3.
+data_p$sllvy[data_p$sllvy=='2']<-'1'
+data_p$sllvy[data_p$sllvy=='3']<-'1'
+#4 - new group formed from 4,5,6.
+data_p$sllvy[data_p$sllvy=='5']<-'4'
+data_p$sllvy[data_p$sllvy=='6']<-'4'
+#7 - new group formed from 7,8,9.
+data_p$sllvy[data_p$sllvy=='8']<-'7'
+data_p$sllvy[data_p$sllvy=='9']<-'7'
+data_p$sllvy<-droplevels(data_p$sllvy)
+levels(data_p$sllvy)<-c("1", "2", "3")
+summary(data_p$sllvy)
+#Group the levels in company size (#of people)
+levels(data_p$SLHKY)
+#1 - new group formed from 1,2,3.
+data_p$SLHKY[data_p$SLHKY=='2']<-'1'
+data_p$SLHKY[data_p$SLHKY=='3']<-'1'
+#4 - new group formed from 4,5,6.
+data_p$SLHKY[data_p$SLHKY=='5']<-'4'
+data_p$SLHKY[data_p$SLHKY=='6']<-'4'
+#7 - new group formed from 7,8,9.
+data_p$SLHKY[data_p$SLHKY=='8']<-'7'
+data_p$SLHKY[data_p$SLHKY=='9']<-'7'
+data_p$SLHKY<-droplevels(data_p$SLHKY)
+levels(data_p$SLHKY)<-c("1", "2", "3")
+summary(data_p$SLHKY)
+#remove missing values 
+data_p<-data_p[!is.na(data_p$tyotu),]
+```
+
+```{r warning=FALSE}
+#6.2 plot chosen variables using the combined groups in peas, sllvy and SLHKY.
+var1<-data_p[,c("svatva", "tyotu", "syntyv", "peas", "sllvy", "SLHKY")]
+str(var1)
+p <- ggpairs(var1, mapping = aes(col=data_p$sukup, alpha=0.3), lower = list(combo = wrap("facethist", bins = 20)), cardinality_threshold=23)
+p
+```
+
+We observe that there is not so big difference between age distribution of males and females. This variable will probably become more informative if we transform it to age (current year - year of birth), and separate different age groups in different categories. 
+We see that the companies with biggest turnover (group 3) are also the companies with bigger number of employees. 
+The pairwise plot also show strong correlation (0.954) between the total earned income **svatva** and income from salary **tyotu**. 
+All these findings should be investigated further. 
+
+#Discussion
+In this work we found that grouping some levels into bigger groups in two categorical variables significantly improved the modeling results and helped to clarify some important tendencies. This is valid only for this particular data subset and the modeling task defined as it is. The situation could be opposite in other situations, when dividing the existing groups will lead to discovering new dependences between the variables. It seems that we cannot say in advance what approach to apply; just have to explore different possibilities. 
+
+Here we have analyzed only a data subset for year=2, which became very small after omitting only a part of the missing values. Therefore we cannot be sure that the results are representative for the whole populations. Furthermore, we could just by chance to be able to observe dependences, which do not exist in other subsets. Therefore it is logical to analyze other samples for different years, providing some statistical analyses for comparing these samples. I have also checked some statistics for year *vuosi*=10. The data points there are a bit more, but the difference is not very significant. 
+```{r include=FALSE}
+#1. Take a subset for year **vuosi**=10 from both original tables. 
+data_workers10 <- subset(data_workers, vuosi==10)
+data_firms10 <- subset(data_firms, vuosi== 10)
+#2. Merge both data frames by its intersection=syrtun 
+data1<-merge(data_workers10, data_firms10, by="syrtun")
+#2106 x 23
+#3. Convert integer values to factors for the investigated categorical variables. 
+data1[,'peas']<-factor(data1[,'peas'])
+data1[,'a7lkm']<-factor(data1[,'a7lkm'])
+data1[,'a18lkm']<-factor(data1[,'a18lkm'])
+data1[,'SLHKY']<-factor(data1[,'SLHKY'])
+data1[,'sllvy']<-factor(data1[,'sllvy'])
+#4. remove all missing values
+data10<-na.omit(data1)
+#114 x 23 - not empty, but still too small subset.
+#sum(is.na(data1$peas))
+#0
+#sum(is.na(data1$a7lkm))
+#444
+#sum(is.na(data1$a18lkm))
+#446
+#sum(is.na(data1$sllvy))
+#0
+#sum(is.na(data1$svatva))
+#16
+#sum(is.na(data1$sukup))
+#0
+#!is.na() deletes only the NA in particular column
+data_10<-data1[!is.na(data1$svatva),]
+#2090 x 23
+data_a_10<-data[!is.na(data1$a7lkm),]
+dim(data_a_10)
+# 1662   23
+data_b_10<-data[!is.na(data1$a18lkm),]
+dim(data_b_10)
+#1660 x 23
+#--------------------------------------------------------
+#summary(data$svatva)
+#Min. 1st Qu.  Median  Mean 3rd Qu.    Max. 
+#  0   14000    18000  19434   23000   99000
+#summary(data_10$svatva)
+#Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+#0    17000    25000    26490   33000  100000 
+#summary(data$sllvy)
+#1   2   3   4   5   6   7   8   9 
+#110  96  63 161 285 296 239 264 402 
+#summary(data_10$sllvy)
+#1   2   3   4   5   6   7   8   9 
+#238  56  72 177 320 310 229 296 392 
+#summary(data$peas)
+#0    1    2   3   4   5   9 
+#307 753 427 155 145 122   7 
+#summary(data_10$peas)
+#  0   1   2   3   4   5   9 
+# 432 681 388 165 240 174  10 
+```
+
+```{r}
+summary(data$svatva)
+```
+
+```{r}
+summary(data_10$svatva)
+```
+
+Here we observe that all values (not only mean and median) for latter year=10 are higher, which is logical because there are 8 years difference and we expect increasing total earned income in time (at least because the inflation). 
+
+```{r}
+summary(sllvy)
+```
+
+```{r}
+summary(data_10$sllvy)
+```
+Here we observe slight decreases in the frequencies of company turnover in higher groups and increasing frequencies in group one, which also cannot be explained only by chance, but it is rather because the economical changes in Finland during this time period. 
+
+```{r}
+summary(peas)
+```
+
+
+```{r}
+summary(data_10$peas)
+```
+Here we observe decreasing the amount of officially married couples and increase of the proportion of couples who live together without official marriage. Also the proportion of singles is increased. This also is rather regular tendency in time than random event. 
+It seems that if we would like to compare the modeling results, we have to choose some subsets quite near in time. 
+
+One of the simplified assumptions here is to **remove the missing data**. For this particular task we did not removed any values from both categorical variables concerning family status and company turnover because these data were complete. But if we were interested in some other categorical variables (like for example *toimiala* or *suuralue*), we have to probably remove some valuable information, which is involved in these missing values. For the categorical variable one of the possibilities is to form an additional category from the missing values, and then apply the multiple correspondance analysis to investigate the associations between different categories [2, 3].  
+
+##Used and useful links 
+1. [Sheldon Ross. Introductory Statistics, 4-th Edition, Elsevier, 2017, p.828.](https://www.elsevier.com/books/introductory-statistics/ross/978-0-12-804317-2) 
+
+2. [Assignments Work during the Course on Multiple Correspondence Analysis (MCA): Theory and Practice, Spring 2017, University of Helsinki](https://github.com/noykova/MultipleCorrespondenceAnalysis)
+
+3. [Multiple Correspondence Analysis Essentials: Interpretation and application to investigate the associations between categories of multiple qualitative variables - R software and data mining](http://www.sthda.com/english/wiki/multiple-correspondence-analysis-essentials-interpretation-and-application-to-investigate-the-associations-between-categories-of-multiple-qualitative-variables-r-software-and-data-mining)
+
+4. [D G Rossite. Tutorial: An example of statistical data analysis using the R environment for statistical computing, Version 1.4; May 6, 2017.](http://www.css.cornell.edu/faculty/dgr2/teach/R/R_corregr.pdf)
+
+5. [Dylan Z. Childs. Exploring categorical variables, 2018.](https://dzchilds.github.io/eda-for-bio/exploring-categorical-variables.html)
+
+6. [Two-Way ANOVA Test in R.](http://www.sthda.com/english/wiki/two-way-anova-test-in-r)
+
+7. [Anova - Type I/II/III SS explained. ](https://www.r-bloggers.com/anova-%E2%80%93-type-iiiiii-ss-explained/)
+
+
+8. [Raccoon | Ch 2.5 - Unbalanced and Nested Anova](https://www.r-bloggers.com/raccoon-ch-2-5-unbalanced-and-nested-anova/)
+
+9. [Two-Way Factorial ANOVA with R](http://s3-euw1-ap-pe-ws4-cws-documents.ri-prod.s3.amazonaws.com/9781138024571/chapters/ch10/1_Two-Way_Factorial_ANOVA_R.JLH.pdf)
+
+10. [The Assumption of Homogeneity of Variance](http://www.statisticssolutions.com/the-assumption-of-homogeneity-of-variance/)
+
+
+
+
+
+
+
+
+
+
+
